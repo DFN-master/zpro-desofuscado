@@ -1,22 +1,18 @@
+import { Request, Response } from 'express';
 import ImportContactsServiceZPRO from '../services/ImportContactsServiceZPRO';
 
-interface ApiData {
-    tenantId: string;
-    [key: string]: any;
+interface AuthenticatedRequest extends Request {
+  user: {
+    tenantId: number;
+  };
 }
 
-interface Response {
-    json: (data: any) => Response;
-    status: (code: number) => Response;
-}
+export const store = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { tenantId } = req.user;
 
-const store = async (apiData: ApiData, res: Response): Promise<Response> => {
-    const { tenantId } = apiData;
+  await ImportContactsServiceZPRO(tenantId);
 
-    await ImportContactsServiceZPRO(tenantId);
-
-    const responseMessage = { message: 'Contacts imported successfully' };
-    return res.status(200).json(responseMessage);
-};
-
-export { store };
+  return res.status(200).json({
+    message: "contacts imported"
+  });
+}; 

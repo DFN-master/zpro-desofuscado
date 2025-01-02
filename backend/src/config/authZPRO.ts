@@ -1,20 +1,15 @@
-'use strict';
-
-// Define the environment configuration interface
-interface EnvConfig {
+interface AuthConfig {
   secret: string;
   expiresIn: string;
   refreshSecret: string;
   refreshExpiresIn: string;
 }
 
-// Extract the environment variables or use default values
-const config: EnvConfig = {
-  secret: process.env.JWT_SECRET || 'defaultSecretKey12345',
+const authConfig: AuthConfig = {
+  secret: process.env.JWT_SECRET || 'My45kIlU7nSQ0G1MJPoQaR',
   expiresIn: '2d',
-  refreshSecret: process.env.JWT_REFRESH_SECRET || 'defaultRefreshSecretKey12345',
-  refreshExpiresIn: '5d',
+  refreshSecret: process.env.JWT_REFRESH_SECRET || 'nhXeIcXugtIeq3PVf25Eu9',
+  refreshExpiresIn: '5d'
 };
 
-// Export the config object
-export default config;
+export default authConfig; 

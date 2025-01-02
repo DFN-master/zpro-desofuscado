@@ -1,103 +1,110 @@
-import * as Yup from "yup";
-import AppError from "../errors/AppError";
-import CreateTicketEvaluationService from "../services/CreateTicketEvaluationService";
-import ListTicketEvaluationService from "../services/ListTicketEvaluationService";
-import DeleteTicketEvaluationService from "../services/DeleteTicketEvaluationService";
-import UpdateTicketEvaluationService from "../services/UpdateTicketEvaluationService";
-import ShowLogEvaluationTicketService from "../services/ShowLogEvaluationTicketService";
+import * as Yup from 'yup';
+import { Request, Response } from 'express';
+import AppErrorZPRO from '../errors/AppErrorZPRO';
+import CreateTicketEvaluationServiceZPRO from '../services/TicketEvaluations/CreateTicketEvaluationServiceZPRO';
+import ListTicketEvaluationServiceZPRO from '../services/TicketEvaluations/ListTicketEvaluationServiceZPRO';
+import DeleteTicketEvaluationServiceZPRO from '../services/TicketEvaluations/DeleteTicketEvaluationServiceZPRO';
+import UpdateTicketEvaluationServiceZPRO from '../services/TicketEvaluations/UpdateTicketEvaluationServiceZPRO';
+import ShowLogEvaluationTicketServiceZPRO from '../services/TicketEvaluations/ShowLogEvaluationTicketServiceZPRO';
 
-// Type definitions
-interface Request {
-    body: {
-        tenantId: string;
-        id?: string;
-    };
-    params?: {
-        ticketId?: string;
-        ticketEvaluationId?: string;
-    };
+interface TicketEvaluationData {
+  evaluation: string;
+  attempts: number;
+  ticketId: number;
+  userId: number;
+  tenantId: number;
 }
 
-interface Response {
-    status: (statusCode: number) => Response;
-    json: (body: any) => Response;
+interface AuthenticatedRequest extends Request {
+  user: {
+    id: number;
+    tenantId: number;
+  }
 }
 
-// Store a new ticket evaluation
-export const store = async (req: Request, res: Response): Promise<Response> => {
-    const { tenantId } = req.body;
-    const data = {
-        ...req.body,
-        userId: req.body.id,
-        tenantId
-    };
+export const store = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { tenantId } = req.user;
 
-    const schema = Yup.object().shape({
-        evaluation: Yup.string().required(),
-        attempts: Yup.number().required(),
-        ticketId: Yup.number().required(),
-        userId: Yup.number().required(),
-        tenantId: Yup.number().required(),
-    });
+  const data: TicketEvaluationData = {
+    ...req.body,
+    userId: req.user.id,
+    tenantId
+  };
 
-    try {
-        await schema.validate(data);
-    } catch (error) {
-        throw new AppError(error.message);
-    }
+  const schema = Yup.object().shape({
+    evaluation: Yup.string().required(),
+    attempts: Yup.number().required(),
+    ticketId: Yup.number().required(),
+    userId: Yup.number().required(),
+    tenantId: Yup.number().required()
+  });
 
-    const ticketEvaluation = await CreateTicketEvaluationService(data);
-    return res.status(201).json(ticketEvaluation);
+  try {
+    await schema.validate(data);
+  } catch (err) {
+    throw new AppErrorZPRO(err.message);
+  }
+
+  const ticketEvaluation = await CreateTicketEvaluationServiceZPRO(data);
+  return res.status(200).json(ticketEvaluation);
 };
 
-// List ticket evaluations
-export const index = async (req: Request, res: Response): Promise<Response> => {
-    const { tenantId } = req.body;
-    const filter = { tenantId };
-    const evaluations = await ListTicketEvaluationService(filter);
-    return res.status(200).json(evaluations);
+export const index = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { tenantId } = req.user;
+  const ticketEvaluations = await ListTicketEvaluationServiceZPRO({ tenantId });
+  return res.status(200).json(ticketEvaluations);
 };
 
-// Update a ticket evaluation
-export const update = async (req: Request, res: Response): Promise<Response> => {
-    const { tenantId } = req.body;
-    const data = {
-        ...req.body,
-        userId: req.body.id,
-        tenantId
-    };
+export const update = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { tenantId } = req.user;
 
-    const schema = Yup.object().shape({
-        evaluation: Yup.string().required(),
-        attempts: Yup.number().required(),
-        ticketId: Yup.number().required(),
-        userId: Yup.number().required(),
-    });
+  const data: TicketEvaluationData = {
+    ...req.body,
+    userId: req.user.id,
+    tenantId
+  };
 
-    try {
-        await schema.validate(data);
-    } catch (error) {
-        throw new AppError(error.message);
-    }
+  const schema = Yup.object().shape({
+    evaluation: Yup.string().required(),
+    attempts: Yup.number().required(), 
+    ticketId: Yup.number().required(),
+    userId: Yup.number().required()
+  });
 
-    const { ticketEvaluationId } = req.params!;
-    const updateData = { data, ticketEvaluationId };
-    const updatedEvaluation = await UpdateTicketEvaluationService(updateData);
-    return res.status(200).json(updatedEvaluation);
+  try {
+    await schema.validate(data);
+  } catch (err) {
+    throw new AppErrorZPRO(err.message);
+  }
+
+  const { ticketEvaluationId } = req.params;
+
+  const ticketEvaluation = await UpdateTicketEvaluationServiceZPRO({
+    ticketEvaluationData: data,
+    ticketEvaluationId
+  });
+
+  return res.status(200).json(ticketEvaluation);
 };
 
-// Remove a ticket evaluation
-export const remove = async (req: Request, res: Response): Promise<Response> => {
-    const { tenantId } = req.body;
-    const { ticketEvaluationId } = req.params!;
+export const remove = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { tenantId } = req.user;
+  const { ticketEvaluationId } = req.params;
 
-    await DeleteTicketEvaluationService({ id: ticketEvaluationId, tenantId });
-    return res.status(200).json({ message: "Ticket evaluation deleted successfully." });
+  await DeleteTicketEvaluationServiceZPRO({
+    id: ticketEvaluationId,
+    tenantId
+  });
+
+  return res.status(200).json({ message: "Ticket evaluation deleted" });
 };
 
-// Show logs of a ticket evaluation
-export const showLogsEvaluation = async (req: Request, res: Response): Promise<Response> => {
-    const { ticketId } = req.params!;
-    const logs = await ShowLogEvaluationTicketService({ ticketId });
-    return res.status(200).json(logs);
-};
+export const showLogsEvaluation = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { ticketId } = req.params;
+  
+  const logs = await ShowLogEvaluationTicketServiceZPRO({
+    ticketId
+  });
+
+  return res.status(200).json(logs);
+}; 

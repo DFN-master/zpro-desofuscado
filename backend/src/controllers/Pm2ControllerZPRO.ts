@@ -1,69 +1,96 @@
 import { exec } from 'child_process';
-import loggerZPRO from '../utils/loggerZPRO';
+import { Request, Response } from 'express';
+import { logger } from '../utils/loggerZPRO';
 import AppErrorZPRO from '../errors/AppErrorZPRO';
 
-interface ApiData {
-  user: {
-    profile: string;
-    [key: string]: any;
-  };
-  [key: string]: any;
+interface PM2Process {
+  name: string;
+  env: NodeJS.ProcessEnv;
 }
 
-interface Response {
-  status: (code: number) => Response;
-  send: (message: string) => Response;
-}
-
-const restartPM2 = (apiData: ApiData, res: Response): void => {
-  const errorMessage = 'ERR_NO_PERMISSION: Admin profile required to restart PM2.';
-  
-  if (apiData.user.profile !== 'admin') {
-    throw new AppErrorZPRO(errorMessage, 401);
+export const restartPM2 = (req: Request, res: Response): void => {
+  // Verifica se o usuário tem permissão de admin
+  if (req.profile.user !== 'admin') {
+    throw new AppErrorZPRO('ERR_NO_PERMISSION', 401);
   }
 
-  const command = '/usr/bin/pm2 jlist';
-  const envOptions = { env: process.env };
-
-  exec(command, envOptions, (error, stdout, stderr) => {
+  // Lista todos os processos PM2
+  exec('pm2 jlist', { env: process.env }, (error, stdout, stderr) => {
     if (error) {
-      loggerZPRO.warn(`Error listing PM2 processes: ${error.message}`);
-      return res.status(500).send(`Error: ${error.message}`);
+      logger.warn(
+        ':::: ZDG :::: Z-PRO :::: Erro ao listar processos PM2: ' + 
+        error.message
+      );
+      res.status(500).send(
+        'Erro ao listar processos PM2: ' + error.message
+      );
+      return;
     }
 
     if (stderr) {
-      loggerZPRO.warn(`Stderr while listing PM2 processes: ${stderr}`);
-      return res.status(500).send(`Stderr: ${stderr}`);
+      logger.warn(
+        ':::: ZDG :::: Z-PRO :::: Stderr ao parsear lista de processos PM2: ' + 
+        stderr
+      );
+      res.status(500).send(
+        'Stderr ao listar processos PM2: ' + stderr
+      );
+      return;
     }
 
-    let processList;
+    let processList: PM2Process[];
+    
     try {
-      processList = JSON.parse(stdout).map((proc: any) => proc.name);
-    } catch (parseError) {
-      loggerZPRO.warn(`Error parsing PM2 process list: ${parseError.message}`);
-      return res.status(500).send(`Error parsing PM2 process list: ${parseError.message}`);
+      processList = JSON.parse(stdout);
+    } catch (error) {
+      logger.warn(
+        ':::: ZDG :::: Z-PRO :::: Erro ao parsear lista de processos PM2: ' + 
+        error.message
+      );
+      res.status(500).send(
+        'Erro ao parsear lista de processos PM2: ' + error.message
+      );
+      return;
     }
 
-    loggerZPRO.info(`Restarting PM2 processes: ${processList.join(', ')}`);
+    // Extrai os nomes dos processos
+    const processNames = processList.map(process => process.name);
 
-    processList.forEach((processName: string) => {
-      exec(`/usr/bin/pm2 restart ${processName}`, envOptions, (restartError, restartStdout, restartStderr) => {
-        if (restartError) {
-          loggerZPRO.warn(`Error restarting PM2 process ${processName}: ${restartError.message}`);
-          return;
+    logger.info(
+      ':::: ZDG :::: Z-PRO :::: Processos PM2 encontrados: ' + 
+      processNames.join(', ')
+    );
+
+    // Reinicia cada processo
+    processNames.forEach(processName => {
+      exec(`pm2 restart ${processName}`, { env: process.env }, 
+        (error, stdout, stderr) => {
+          if (error) {
+            logger.warn(
+              ':::: ZDG :::: Z-PRO :::: Erro ao reiniciar processo ' + 
+              processName + ': ' + error.message
+            );
+            return;
+          }
+
+          if (stderr) {
+            logger.warn(
+              ':::: ZDG :::: Z-PRO :::: Stderr ao reiniciar PM2 para ' + 
+              processName + ': ' + stderr
+            );
+            return;
+          }
+
+          logger.info(
+            ':::: ZDG :::: Z-PRO :::: ' + processName + 
+            ' reiniciado com sucesso: ' + stdout
+          );
         }
-
-        if (restartStderr) {
-          loggerZPRO.warn(`Stderr restarting PM2 process ${processName}: ${restartStderr}`);
-          return;
-        }
-
-        loggerZPRO.info(`Successfully restarted PM2 process ${processName}: ${restartStdout}`);
-      });
+      );
     });
 
-    res.status(200).send('PM2 restart process started successfully.');
+    res.send(
+      'Tentativa de reiniciar todos os processos PM2 iniciada'
+    );
   });
-};
-
-export { restartPM2 };
+}; 

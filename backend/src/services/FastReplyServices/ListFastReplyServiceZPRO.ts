@@ -1,24 +1,29 @@
-'use strict';
+import { FastReplyZPRO } from "../../models/FastReplyZPRO";
 
-import FastReplyZPRO from '../../models/FastReplyZPRO';
-
-interface ListFastReplyServiceProps {
-  tenantId: number;
+interface Request {
+  tenantId: number | string;
 }
 
-const ListFastReplyService = async ({ tenantId }: ListFastReplyServiceProps): Promise<any> => {
-  try {
-    const orderParams = { key: 'id', value: 'ASC' };
+interface FastReplyResponse {
+  id: number;
+  key: string;
+  message: string;
+  tenantId: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
-    const result = await FastReplyZPRO.findAll({
-      where: { tenantId },
-      order: [[orderParams.key, orderParams.value]],
-    });
+const ListFastReplyService = async ({ tenantId }: Request): Promise<FastReplyResponse[]> => {
+  const fastReplies = await FastReplyZPRO.findAll({
+    where: {
+      tenantId
+    },
+    order: [
+      ["key", "ASC"]
+    ]
+  });
 
-    return result;
-  } catch (error) {
-    throw new Error('Error while fetching fast replies');
-  }
+  return fastReplies;
 };
 
-export default ListFastReplyService;
+export default ListFastReplyService; 

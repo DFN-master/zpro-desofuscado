@@ -1,63 +1,55 @@
 import {
-    Table,
-    Column,
-    Model,
-    PrimaryKey,
-    AutoIncrement,
-    AllowNull,
-    DataType,
-    CreatedAt,
-    UpdatedAt,
-    ForeignKey,
-    BelongsTo,
-    Default,
+  Table,
+  Column,
+  Model,
+  PrimaryKey,
+  AutoIncrement,
+  ForeignKey,
+  BelongsTo,
+  AllowNull,
+  Default,
+  CreatedAt,
+  UpdatedAt,
+  DataType
 } from 'sequelize-typescript';
-import Tenant from './Tenant';
-import User from './User';
+import Tenant from './TenantZPRO';
+import User from './UserZPRO';
 
 @Table
-class TicketNotes extends Model {
-    @PrimaryKey
-    @AutoIncrement
-    @Column
-    id!: number;
+export default class TicketNotes extends Model {
+  @PrimaryKey
+  @AutoIncrement
+  @Column
+  id!: number;
 
-    @AllowNull(false)
-    @Column(DataType.TEXT)
-    notes!: string;
+  @Column(DataType.TEXT)
+  notes!: string;
 
-    @AllowNull(false)
-    @Column
-    ticketId!: number;
+  @Column
+  ticketId!: number;
 
-    @ForeignKey(() => User)
-    @AllowNull(false)
-    @Column
-    userId!: number;
+  @ForeignKey(() => User)
+  @Column
+  userId!: number;
 
-    @BelongsTo(() => User)
-    user!: User;
+  @BelongsTo(() => User)
+  user!: User;
 
-    @ForeignKey(() => Tenant)
-    @AllowNull(false)
-    @Column
-    tenantId!: number;
+  @ForeignKey(() => Tenant)
+  @Column
+  tenantId!: number;
 
-    @BelongsTo(() => Tenant)
-    tenant!: Tenant;
+  @BelongsTo(() => Tenant)
+  tenant!: Tenant;
 
-    @Default(null)
-    @AllowNull(true)
-    @Column(DataType.JSON)
-    medias!: string[]; // Adicionando campo de mídias
+  @Default(null)
+  @AllowNull
+  @Column
+  idFront!: string;
 
-    @CreatedAt
-    @Column
-    createdAt!: Date;
+  @CreatedAt
+  createdAt!: Date;
 
-    @UpdatedAt
-    @Column
-    updatedAt!: Date;
-}
-
-export default TicketNotes;
+  @UpdatedAt
+  updatedAt!: Date;
+} 

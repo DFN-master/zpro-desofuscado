@@ -1,161 +1,134 @@
-'use strict';
+import { Request, Response } from 'express';
+import { getIO } from '../libs/socketZPRO';
+import AdminListChatFlowService from '../services/AdminServices/AdminListChatFlowServiceZPRO';
+import AdminListSettingsService from '../services/AdminServices/AdminListSettingsServiceZPRO';
+import AdminListTenantsService from '../services/AdminServices/AdminListTenantsServiceZPRO';
+import AdminListUsersService from '../services/AdminServices/AdminListUsersServiceZPRO';
+import AdminListChannelsService from '../services/AdminServices/AdminListChannelsServiceZPRO';
+import AdminUpdateUserService from '../services/AdminServices/AdminUpdateUserServiceZPRO';
+import UpdateSettingService from '../services/SettingService/UpdateSettingServiceZPRO';
+import CreateWhatsAppService from '../services/Whatsapp/Service/CreateWhatsAppServiceZPRO';
 
-// Importação dos serviços necessários
-const socketZPRO = require('../libs/socketZPRO');
-const AdminListChatFlowServiceZPRO = require('../services/AdminListChatFlowServiceZPRO');
-const AdminListSettingsServiceZPRO = require('../services/AdminListSettingsServiceZPRO');
-const AdminListTenantsServiceZPRO = require('../services/AdminListTenantsServiceZPRO');
-const AdminListUsersServiceZPRO = require('../services/AdminListUsersServiceZPRO');
-const AdminListChannelsServiceZPRO = require('../services/AdminListChannelsServiceZPRO');
-const AdminUpdateUserServiceZPRO = require('../services/AdminUpdateUserServiceZPRO');
-const UpdateSettingServiceZPRO = require('../services/UpdateSettingServiceZPRO');
-const CreateWhatsAppServiceZPRO = require('../services/CreateWhatsAppServiceZPRO');
+interface IndexUsersQuery {
+  searchParam?: string;
+  pageNumber?: string | number;
+}
 
-// Função para listar usuários
-const indexUsers = async (req, res) => {
-    const { searchParam, pageNumber } = req.body;
-    const query = { searchParam, pageNumber };
+interface UpdateUserData {
+  userId: number;
+  userData: any;
+}
 
-    try {
-        const { users, count, hasMore } = await AdminListUsersServiceZPRO.list(query);
-        return res.status(200).json({ users, count, hasMore });
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
-    }
+interface ChannelData {
+  name: string;
+  status: string;
+  tenantId: number;
+  tokenTelegram?: string;
+  instagramUser?: string;
+  instagramKey?: string;
+  type: string;
+  wabaBSP?: string;
+  tokenAPI?: string;
+}
+
+export const indexUsers = async (req: Request, res: Response): Promise<Response> => {
+  const { searchParam, pageNumber } = req.query as IndexUsersQuery;
+  
+  const { users, count, hasMore } = await AdminListUsersService({
+    searchParam,
+    pageNumber
+  });
+
+  return res.status(200).json({ users, count, hasMore });
 };
 
-// Função para atualizar um usuário
-const updateUser = async (req, res) => {
-    const { userId } = req.params;
-    const { name } = req.body;
-    const payload = { name, userId };
+export const updateUser = async (req: Request, res: Response): Promise<Response> => {
+  const userData = req.body;
+  const { userId } = req.params;
 
-    try {
-        const updatedUser = await AdminUpdateUserServiceZPRO.update(payload);
-        const io = socketZPRO.getIO();
+  const user = await AdminUpdateUserService({ 
+    userData,
+    userId: Number(userId)
+  });
 
-        if (updatedUser) {
-            io.emit(`${updatedUser.tenantId}:user`, {
-                action: 'USER_UPDATED',
-                user: updatedUser
-            });
-        }
+  const io = getIO();
+  
+  if (user) {
+    io.emit(`${user.tenantId}:user`, {
+      action: "update",
+      user
+    });
+  }
 
-        return res.status(200).json(updatedUser);
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
-    }
+  return res.status(200).json(user);
 };
 
-// Função para listar tenants
-const indexTenants = async (req, res) => {
-    try {
-        const tenants = await AdminListTenantsServiceZPRO.list();
-        return res.status(200).json(tenants);
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
-    }
+export const indexTenants = async (req: Request, res: Response): Promise<Response> => {
+  const tenants = await AdminListTenantsService();
+  return res.status(200).json(tenants);
 };
 
-// Função para listar fluxos de chat
-const indexChatFlow = async (req, res) => {
-    const { tenantId } = req.params;
-
-    try {
-        const chatFlows = await AdminListChatFlowServiceZPRO.list({ tenantId });
-        return res.status(200).json(chatFlows);
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
-    }
+export const indexChatFlow = async (req: Request, res: Response): Promise<Response> => {
+  const { tenantId } = req.params;
+  const chatFlow = await AdminListChatFlowService({ tenantId: Number(tenantId) });
+  return res.status(200).json(chatFlow);
 };
 
-// Função para listar configurações
-const indexSettings = async (req, res) => {
-    const { tenantId } = req.params;
-
-    try {
-        const settings = await AdminListSettingsServiceZPRO.list(tenantId);
-        return res.status(200).json(settings);
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
-    }
+export const indexSettings = async (req: Request, res: Response): Promise<Response> => {
+  const { tenantId } = req.params;
+  const settings = await AdminListSettingsService(Number(tenantId));
+  return res.status(200).json(settings);
 };
 
-// Função para atualizar configurações
-const updateSettings = async (req, res) => {
-    const { tenantId } = req.params;
-    const { key, value } = req.body;
+export const updateSettings = async (req: Request, res: Response): Promise<Response> => {
+  const { tenantId } = req.params;
+  const { value, key } = req.body;
 
-    const payload = { key, value, tenantId };
+  const setting = await UpdateSettingService({
+    key,
+    value,
+    tenantId: Number(tenantId)
+  });
 
-    try {
-        const updatedSetting = await UpdateSettingServiceZPRO.update(payload);
-        const io = socketZPRO.getIO();
+  const io = getIO();
+  io.emit(`${tenantId}:settings`, {
+    action: "update",
+    setting
+  });
 
-        io.emit(`${tenantId}:settings`, {
-            action: 'SETTINGS_UPDATED',
-            setting: updatedSetting
-        });
-
-        return res.status(200).json(updatedSetting);
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
-    }
+  return res.status(200).json(setting);
 };
 
-// Função para listar canais
-const indexChannels = async (req, res) => {
-    const { tenantId } = req.params;
-
-    try {
-        const channels = await AdminListChannelsServiceZPRO.list({ tenantId });
-        return res.status(200).json(channels);
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
-    }
+export const indexChannels = async (req: Request, res: Response): Promise<Response> => {
+  const { tenantId } = req.query;
+  const channels = await AdminListChannelsService({ tenantId: Number(tenantId) });
+  return res.status(200).json(channels);
 };
 
-// Função para criar um novo canal
-const storeChannel = async (req, res) => {
-    const {
-        name,
-        tenantId,
-        tokenTelegram,
-        instagramUser,
-        instagramKey,
-        type,
-        wabaBSP,
-        tokenAPI
-    } = req.body;
+export const storeChannel = async (req: Request, res: Response): Promise<Response> => {
+  const {
+    name,
+    tenantId,
+    tokenTelegram,
+    instagramUser,
+    instagramKey,
+    type,
+    wabaBSP,
+    tokenAPI
+  } = req.body;
 
-    const payload = {
-        name,
-        status: 'CREATED',
-        tenantId,
-        tokenTelegram,
-        instagramUser,
-        instagramKey,
-        type,
-        wabaBSP,
-        tokenAPI
-    };
+  const channelData: ChannelData = {
+    name,
+    status: "DISCONNECTED",
+    tenantId,
+    tokenTelegram,
+    instagramUser,
+    instagramKey,
+    type,
+    wabaBSP,
+    tokenAPI
+  };
 
-    try {
-        const newChannel = await CreateWhatsAppServiceZPRO.create(payload);
-        return res.status(201).json(newChannel);
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
-    }
-};
-
-// Exportando todas as funções para uso em outros módulos
-module.exports = {
-    indexUsers,
-    updateUser,
-    indexTenants,
-    indexChatFlow,
-    indexSettings,
-    updateSettings,
-    indexChannels,
-    storeChannel
-};
+  const channel = await CreateWhatsAppService(channelData);
+  return res.status(200).json(channel);
+}; 

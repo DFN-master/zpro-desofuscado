@@ -1,56 +1,60 @@
 import { QueryInterface, DataTypes } from 'sequelize';
+import { Migration } from '../types/Migration';
 
-export const up = async (queryInterface: QueryInterface) => {
+const migration: Migration = {
+  up: async (queryInterface: QueryInterface): Promise<void> => {
     await queryInterface.createTable('TicketNotes', {
-        id: {
-            type: DataTypes.INTEGER,
-            autoIncrement: true,
-            primaryKey: true,
-            allowNull: false,
+      id: {
+        type: DataTypes.INTEGER,
+        autoIncrement: true,
+        primaryKey: true,
+        allowNull: false
+      },
+      notes: {
+        type: DataTypes.TEXT,
+        onUpdate: 'CASCADE',
+        onDelete: 'RESTRICT',
+        allowNull: false
+      },
+      ticketId: {
+        type: DataTypes.INTEGER,
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+        allowNull: false
+      },
+      userId: {
+        type: DataTypes.INTEGER,
+        references: {
+          model: 'Users',
+          key: 'id'
         },
-        notes: {
-            type: DataTypes.TEXT,
-            allowNull: false,
-            onUpdate: 'CASCADE',
-            onDelete: 'CASCADE',
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL'
+      },
+      tenantId: {
+        type: DataTypes.INTEGER,
+        references: {
+          model: 'Tenants',
+          key: 'id'
         },
-        ticketId: {
-            type: DataTypes.INTEGER,
-            allowNull: false,
-            onUpdate: 'CASCADE',
-            onDelete: 'CASCADE',
-        },
-        userId: {
-            type: DataTypes.INTEGER,
-            references: {
-                model: 'Users',
-                key: 'id',
-            },
-            onUpdate: 'CASCADE',
-            onDelete: 'SET NULL',
-            allowNull: false,
-        },
-        tenantId: {
-            type: DataTypes.INTEGER,
-            references: {
-                model: 'Tenants',
-                key: 'id',
-            },
-            onUpdate: 'CASCADE',
-            onDelete: 'CASCADE',
-            allowNull: false,
-        },
-        createdAt: {
-            type: DataTypes.DATE,
-            allowNull: false,
-        },
-        updatedAt: {
-            type: DataTypes.DATE,
-            allowNull: false,
-        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+        allowNull: false
+      },
+      createdAt: {
+        type: DataTypes.DATE,
+        allowNull: false
+      },
+      updatedAt: {
+        type: DataTypes.DATE,
+        allowNull: false
+      }
     });
+  },
+
+  down: async (queryInterface: QueryInterface): Promise<void> => {
+    await queryInterface.dropTable('TicketNotes');
+  }
 };
 
-export const down = async (queryInterface: QueryInterface) => {
-    await queryInterface.dropTable('TicketNotes');
-};
+export default migration; 

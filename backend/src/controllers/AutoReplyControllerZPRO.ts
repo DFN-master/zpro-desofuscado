@@ -1,81 +1,102 @@
-'use strict';
-
-import * as Yup from 'yup';
 import { Request, Response } from 'express';
-import CreateAutoReplyServiceZPRO from '../services/AutoReplyServices/CreateAutoReplyServiceZPRO';
-import AppErrorZPRO from '../errors/AppErrorZPRO';
-import ListAutoReplyServiceZPRO from '../services/AutoReplyServices/ListAutoReplyServiceZPRO';
-import UpdateAutoReplyServiceZPRO from '../services/AutoReplyServices/UpdateAutoReplyServiceZPRO';
-import DeleteAutoReplyServiceZPRO from '../services/AutoReplyServices/DeleteAutoReplyServiceZPRO';
+import * as Yup from 'yup';
+import AppError from '../errors/AppErrorZPRO';
+import CreateAutoReplyService from '../services/AutoReplyServices/CreateAutoReplyServiceZPRO';
+import ListAutoReplyService from '../services/AutoReplyServices/ListAutoReplyServiceZPRO';
+import UpdateAutoReplyService from '../services/AutoReplyServices/UpdateAutoReplyServiceZPRO';
+import DeleteAutoReplyService from '../services/AutoReplyServices/DeleteAutoReplyServiceZPRO';
 
-// Store Auto Reply
+interface StoreData {
+  name: string;
+  action: string;
+  tenantId: number;
+  userId: number;
+}
+
+interface UpdateData {
+  name: string;
+  action: string;
+  userId: number;
+}
+
 export const store = async (req: Request, res: Response): Promise<Response> => {
-  const { tenantId } = req.body;
-
-  if (req.body.profile !== 'admin' && req.body.profile !== 'super') {
-    throw new AppErrorZPRO('ERR_NO_PERMISSION', 403);
+  const { tenantId } = req.user;
+  
+  if (req.user.profile !== 'admin' && req.user.profile !== 'super') {
+    throw new AppError('ERR_NO_PERMISSION', 403);
   }
 
-  const newAutoReply = { ...req.body, tenantId };
+  const data: StoreData = {
+    ...req.body,
+    tenantId
+  };
+
   const schema = Yup.object().shape({
     name: Yup.string().required(),
-    action: Yup.string().required(),
+    action: Yup.number().required(),
     tenantId: Yup.number().required(),
-    userId: Yup.number().required(),
+    userId: Yup.number().required()
   });
 
   try {
-    await schema.validate(newAutoReply);
-  } catch (error) {
-    throw new AppErrorZPRO(error.message);
+    await schema.validate(data);
+  } catch (err) {
+    throw new AppError(err.message);
   }
 
-  const autoReply = await CreateAutoReplyServiceZPRO(newAutoReply);
-  return res.status(201).json(autoReply);
+  const autoReply = await CreateAutoReplyService(data);
+  return res.status(200).json(autoReply);
 };
 
-// List Auto Replies
 export const index = async (req: Request, res: Response): Promise<Response> => {
-  const { tenantId } = req.body;
-  const autoReplies = await ListAutoReplyServiceZPRO({ tenantId });
+  const { tenantId } = req.user;
+  const autoReplies = await ListAutoReplyService({ tenantId });
   return res.status(200).json(autoReplies);
 };
 
-// Update Auto Reply
 export const update = async (req: Request, res: Response): Promise<Response> => {
-  if (req.body.profile !== 'admin' && req.body.profile !== 'super') {
-    throw new AppErrorZPRO('ERR_NO_PERMISSION', 403);
+  if (req.user.profile !== 'admin' && req.user.profile !== 'super') {
+    throw new AppError('ERR_NO_PERMISSION', 403);
   }
 
-  const { tenantId } = req.body;
-  const { autoReplyId } = req.params;
-  const updateData = { ...req.body, tenantId, autoReplyId };
+  const { tenantId } = req.user;
+  const data: UpdateData = req.body;
 
   const schema = Yup.object().shape({
     name: Yup.string().required(),
-    action: Yup.string().required(),
-    userId: Yup.number().required(),
+    action: Yup.number().required(),
+    userId: Yup.number().required()
   });
 
   try {
-    await schema.validate(updateData);
-  } catch (error) {
-    throw new AppErrorZPRO(error.message);
+    await schema.validate(data);
+  } catch (err) {
+    throw new AppError(err.message);
   }
 
-  const updatedAutoReply = await UpdateAutoReplyServiceZPRO(updateData);
-  return res.status(200).json(updatedAutoReply);
-};
-
-// Delete Auto Reply
-export const remove = async (req: Request, res: Response): Promise<Response> => {
-  if (req.body.profile !== 'admin' && req.body.profile !== 'super') {
-    throw new AppErrorZPRO('ERR_NO_PERMISSION', 403);
-  }
-
-  const { tenantId } = req.body;
   const { autoReplyId } = req.params;
 
-  await DeleteAutoReplyServiceZPRO({ id: autoReplyId, tenantId });
-  return res.status(200).json({ message: 'Auto reply deleted' });
+  const autoReply = await UpdateAutoReplyService({
+    autoReplyData: data,
+    autoReplyId,
+    tenantId
+  });
+
+  return res.status(200).json(autoReply);
 };
+
+export const remove = async (req: Request, res: Response): Promise<Response> => {
+  if (req.user.profile !== 'admin' && req.user.profile !== 'super') {
+    throw new AppError('ERR_NO_PERMISSION', 403);
+  }
+
+  const { tenantId } = req.user;
+  const { autoReplyId } = req.params;
+
+  await DeleteAutoReplyService({
+    id: autoReplyId,
+    tenantId
+  });
+
+  return res.status(200).json({ message: 'Auto reply deleted' });
+}; 

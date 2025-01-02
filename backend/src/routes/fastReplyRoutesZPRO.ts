@@ -1,23 +1,56 @@
-import express from 'express';
-import isAuth from '../middlewares/isAuthZPRO';
+import express, { Router } from 'express';
+import isAuthZPRO from '../middleware/isAuthZPRO';
 import multer from 'multer';
 import uploadConfig from '../config/uploadZPRO';
 import * as FastReplyController from '../controllers/FastReplyControllerZPRO';
 
-const router = express.Router();
+interface MulterConfig {
+  limits: {
+    fileSize: number;
+    files: number;
+  };
+}
 
-// File upload configuration
+// Configuração do multer para upload de arquivos
+const multerConfig: MulterConfig = {
+  limits: {
+    files: 1,
+    fileSize: 1024 * 1024 * 10 // 10MB
+  }
+};
+
 const upload = multer({
   ...uploadConfig,
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10 MB
-  },
-}).single('media');
+  ...multerConfig
+});
 
-// FastReply routes
-router.post('/fastreply', isAuth, upload, FastReplyController.store);
-router.get('/fastreply', isAuth, FastReplyController.index);
-router.put('/fastreply/:fastReplyId', isAuth, upload, FastReplyController.update);
-router.delete('/fastreply/:fastReplyId', isAuth, FastReplyController.remove);
+const fastReplyRoutes: Router = Router();
 
-export default router;
+// Rotas para respostas rápidas
+fastReplyRoutes.post(
+  '/fastreply',
+  isAuthZPRO,
+  upload.single('medias'),
+  FastReplyController.store
+);
+
+fastReplyRoutes.get(
+  '/fastreply',
+  isAuthZPRO,
+  FastReplyController.index
+);
+
+fastReplyRoutes.put(
+  '/fastreply/:fastReplyId',
+  isAuthZPRO,
+  upload.single('medias'),
+  FastReplyController.update
+);
+
+fastReplyRoutes.delete(
+  '/fastreply/:fastReplyId',
+  isAuthZPRO,
+  FastReplyController.remove
+);
+
+export default fastReplyRoutes; 

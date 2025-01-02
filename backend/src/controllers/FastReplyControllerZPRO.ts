@@ -1,105 +1,128 @@
+import { Request, Response } from 'express';
 import * as Yup from 'yup';
-import AppError from '../errors/AppError';
-import CreateFastReplyService from '../services/FastReplyServices/CreateFastReplyService';
-import ListFastReplyService from '../services/FastReplyServices/ListFastReplyService';
-import DeleteFastReplyService from '../services/FastReplyServices/DeleteFastReplyService';
-import UpdateFastReplyService from '../services/FastReplyServices/UpdateFastReplyService';
+import AppError from '../errors/AppErrorZPRO';
+import CreateFastReplyService from '../services/FastReplyServices/CreateFastReplyServiceZPRO';
+import ListFastReplyService from '../services/FastReplyServices/ListFastReplyServiceZPRO';
+import DeleteFastReplyService from '../services/FastReplyServices/DeleteFastReplyServiceZPRO';
+import UpdateFastReplyService from '../services/FastReplyServices/UpdateFastReplyServiceZPRO';
 
-export const store = async (req: any, res: any): Promise<any> => {
-    const { tenantId } = req.body;
-    
-    if (req.body.profile !== 'admin' && req.body.profile !== 'super') {
-        throw new AppError('ERR_NO_PERMISSION', 403);
-    }
+interface FastReplyData {
+  key: string;
+  message: string;
+  userId: number;
+  tenantId: number;
+  mediaPath?: string | null;
+}
 
-    const fastReplyData = {
-        ...req.body,
-        userId: req.body.user.id,
-        tenantId,
-    };
+interface AuthenticatedRequest extends Request {
+  user: {
+    id: number;
+    profile: string;
+    tenantId: number;
+  };
+}
 
-    if (req.media) {
-        fastReplyData.media = req.media.filename;
-    }
+export const store = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { tenantId } = req.user;
 
-    const schema = Yup.object().shape({
-        key: Yup.string().required(),
-        message: Yup.string().required(),
-        userId: Yup.number().required(),
-        tenantId: Yup.number().required(),
-    });
+  if (req.user.profile !== "admin" && req.user.profile !== "super") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
 
-    try {
-        await schema.validate(fastReplyData);
-    } catch (error) {
-        throw new AppError(error.message, 400);
-    }
+  const data: FastReplyData = {
+    ...req.body,
+    userId: req.user.id,
+    tenantId
+  };
 
-    const fastReply = await CreateFastReplyService(fastReplyData);
-    return res.status(201).json(fastReply);
+  if (req.file) {
+    data.mediaPath = req.file.filename;
+  }
+
+  const schema = Yup.object().shape({
+    key: Yup.string().required(),
+    message: Yup.string().required(),
+    userId: Yup.number().required(),
+    tenantId: Yup.number().required()
+  });
+
+  try {
+    await schema.validate(data);
+  } catch (err) {
+    throw new AppError(err.message);
+  }
+
+  const fastReply = await CreateFastReplyService(data);
+
+  return res.status(200).json(fastReply);
 };
 
-export const index = async (req: any, res: any): Promise<any> => {
-    const { tenantId } = req.body;
-    const filters = { tenantId };
-
-    const fastReplies = await ListFastReplyService(filters);
-    return res.status(200).json(fastReplies);
+export const index = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { tenantId } = req.user;
+  const fastReplies = await ListFastReplyService({ tenantId });
+  return res.status(200).json(fastReplies);
 };
 
-export const update = async (req: any, res: any): Promise<any> => {
-    const { tenantId } = req.body;
+export const update = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { tenantId } = req.user;
 
-    if (req.body.profile !== 'admin' && req.body.profile !== 'super') {
-        throw new AppError('ERR_NO_PERMISSION', 403);
-    }
+  if (req.user.profile !== "admin" && req.user.profile !== "super") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
 
-    const updateData = {
-        ...req.body,
-        userId: req.body.user.id,
-        tenantId,
-    };
+  const data: FastReplyData = {
+    ...req.body,
+    userId: req.user.id,
+    tenantId
+  };
 
-    if (req.media) {
-        updateData.media = req.media.filename;
-    }
+  if (req.file && !req.body.medias) {
+    data.mediaPath = req.file.filename;
+  }
 
-    const schema = Yup.object().shape({
-        key: Yup.string().required(),
-        message: Yup.string().required(),
-        userId: Yup.number().required(),
-    });
+  if (!req.file && !req.body.medias) {
+    data.mediaPath = null;
+  }
 
-    try {
-        await schema.validate(updateData);
-    } catch (error) {
-        throw new AppError(error.message, 400);
-    }
+  if (req.body.medias === "null") {
+    data.mediaPath = null;
+  }
 
-    const { fastReplyId } = req.params;
-    const updatePayload = {
-        id: fastReplyId,
-        data: updateData,
-    };
+  const schema = Yup.object().shape({
+    key: Yup.string().required(),
+    message: Yup.string().required(),
+    userId: Yup.number().required()
+  });
 
-    const fastReply = await UpdateFastReplyService(updatePayload);
-    return res.status(200).json(fastReply);
+  try {
+    await schema.validate(data);
+  } catch (err) {
+    throw new AppError(err.message);
+  }
+
+  const { fastReplyId } = req.params;
+
+  const fastReply = await UpdateFastReplyService({
+    fastReplyData: data,
+    fastReplyId: +fastReplyId
+  });
+
+  return res.status(200).json(fastReply);
 };
 
-export const remove = async (req: any, res: any): Promise<any> => {
-    const { tenantId } = req.body;
+export const remove = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  const { tenantId } = req.user;
 
-    if (req.body.profile !== 'admin' && req.body.profile !== 'super') {
-        throw new AppError('ERR_NO_PERMISSION', 403);
-    }
+  if (req.user.profile !== "admin" && req.user.profile !== "super") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
 
-    const { fastReplyId } = req.params;
-    const deleteData = {
-        id: fastReplyId,
-        tenantId,
-    };
+  const { fastReplyId } = req.params;
 
-    await DeleteFastReplyService(deleteData);
+  await DeleteFastReplyService({
+    id: +fastReplyId,
+    tenantId
+  });
 
-    return res.status(200).json({ message: 'Fast Reply deleted' });
-};
+  return res.status(200).json({ message: "Fast Reply deleted" });
+}; 

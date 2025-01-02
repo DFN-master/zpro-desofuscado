@@ -1,9 +1,7 @@
-'use strict';
+import AppError from "../../errors/AppError";
+import FastReply from "../../models/FastReplyZPRO";
 
-import AppError from '../../errors/AppErrorZPRO';
-import FastReply from '../../models/FastReplyZPRO';
-
-interface DeleteFastReplyServiceProps {
+interface DeleteFastReplyRequest {
   id: number;
   tenantId: number;
 }
@@ -11,23 +9,23 @@ interface DeleteFastReplyServiceProps {
 const DeleteFastReplyService = async ({
   id,
   tenantId
-}: DeleteFastReplyServiceProps): Promise<void> => {
-  try {
-    const fastReply = await FastReply.findOne({
-      where: {
-        id: id,
-        tenantId: tenantId
-      }
-    });
-
-    if (!fastReply) {
-      throw new AppError('ERR_NO_FAST_REPLY_FOUND', 404);
+}: DeleteFastReplyRequest): Promise<void> => {
+  const fastReply = await FastReply.findOne({
+    where: {
+      id,
+      tenantId
     }
+  });
 
+  if (!fastReply) {
+    throw new AppError("ERR_FAST_REPLY_NOT_FOUND", 404);
+  }
+
+  try {
     await fastReply.destroy();
-  } catch (error) {
-    throw new AppError('ERR_FAST_REPLY_DELETE_FAILED', 500);
+  } catch (err) {
+    throw new AppError("ERR_FAST_REPLY_EXISTS", 500);
   }
 };
 
-export default DeleteFastReplyService;
+export default DeleteFastReplyService; 

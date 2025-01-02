@@ -1,120 +1,143 @@
-'use strict';
-
-// Importações necessárias
+import { Request, Response } from 'express';
 import * as Yup from 'yup';
-import { getIO } from '../libs/socketZPRO';
-import ListBanListServiceZPRO from '../services/BanListService/ListBanListServiceZPRO';
-import CreateBanListServiceZPRO from '../services/BanListService/CreateBanListServiceZPRO';
-import ShowBanListServiceZPRO from '../services/BanListService/ShowBanListServiceZPRO';
-import UpdateBanListServiceZPRO from '../services/BanListService/UpdateBanListServiceZPRO';
-import DeleteBanListServiceZPRO from '../services/BanListService/DeleteBanListServiceZPRO';
-import DeleteAllBanListServiceZPRO from '../services/BanListService/DeleteAllBanListServiceZPRO';
-import AppErrorZPRO from '../errors/AppErrorZPRO';
+import { getIO } from '../libs/socket';
+import ListBanListService from '../services/BanList/ListBanListServiceZPRO';
+import CreateBanListService from '../services/BanList/CreateBanListServiceZPRO';
+import ShowBanListService from '../services/BanList/ShowBanListServiceZPRO';
+import UpdateBanListService from '../services/BanList/UpdateBanListServiceZPRO';
+import DeleteBanListService from '../services/BanList/DeleteBanListServiceZPRO';
+import DeleteAllBanListService from '../services/BanList/DeleteAllBanListServiceZPRO';
+import AppError from '../errors/AppErrorZPRO';
 
-// Função para listar banimentos
-export const index = async (req: any, res: any) => {
-    const { searchParam, pageNumber } = req.query;
-    const { tenantId } = req.params;
-    const query = { searchParam, pageNumber, tenantId };
+interface IndexQuery {
+  searchParam?: string;
+  pageNumber?: string | number;
+  tenantId: number;
+}
+
+interface StoreData {
+  number: string;
+  whatsappId: number;
+  groupId: any[];
+  userId: number;
+  tenantId: number;
+}
+
+export const index = async (req: Request, res: Response): Promise<Response> => {
+  const { searchParam, pageNumber } = req.query;
+  const { tenantId } = req.user;
+
+  const { banList, count, hasMore } = await ListBanListService({
+    searchParam: searchParam as string,
+    pageNumber: pageNumber as string,
+    tenantId
+  } as IndexQuery);
+
+  return res.json({
+    banList,
+    count,
+    hasMore
+  });
+};
+
+export const store = async (req: Request, res: Response): Promise<Response> => {
+  const { tenantId, id } = req.user;
+  const { number, whatsappId, groupId } = req.body;
+
+  const schema = Yup.object().shape({
+    groupId: Yup.string().required(),
+    number: Yup.string().required(),
+    userId: Yup.number().required(),
+    tenantId: Yup.number().required()
+  });
+
+  const banListArray = [];
+
+  for (const group of groupId) {
+    const data: StoreData = {
+      number,
+      whatsappId,
+      groupId: group.id,
+      userId: parseInt(id),
+      tenantId
+    };
 
     try {
-        const { banList, count, hasMore } = await ListBanListServiceZPRO(query);
-        return res.json({ banList, count, hasMore });
+      await schema.validate(data);
+      const banList = await CreateBanListService(data);
+      banListArray.push(banList);
     } catch (error) {
-        throw new AppErrorZPRO(error.message);
+      throw new AppError(error.message);
     }
+  }
+
+  return res.status(200).json(banListArray);
 };
 
-// Função para criar banimentos
-export const store = async (req: any, res: any) => {
-    const { tenantId, id: userId } = req.params;
-    const { number, whatsappId, groupId } = req.body;
-
-    const schema = Yup.object().shape({
-        groupId: Yup.string().required(),
-        number: Yup.string().required(),
-        userId: Yup.string().required(),
-        tenantId: Yup.string().required(),
-    });
-
-    const banListItems = [];
-    for (const group of groupId) {
-        const data = { number, whatsappId, groupId: group.id, userId: parseInt(userId), tenantId };
-
-        try {
-            await schema.validate(data);
-            const banListItem = await CreateBanListServiceZPRO(data);
-            banListItems.push(banListItem);
-        } catch (error) {
-            throw new AppErrorZPRO(error.message);
-        }
-    }
-
-    return res.status(201).json(banListItems);
+export const show = async (req: Request, res: Response): Promise<Response> => {
+  const { banListId } = req.params;
+  const banList = await ShowBanListService(banListId);
+  return res.status(200).json(banList);
 };
 
-// Função para exibir um banimento específico
-export const show = async (req: any, res: any) => {
-    const { banListId } = req.params;
-    try {
-        const banList = await ShowBanListServiceZPRO(banListId);
-        return res.status(200).json(banList);
-    } catch (error) {
-        throw new AppErrorZPRO(error.message);
-    }
+export const update = async (req: Request, res: Response): Promise<Response> => {
+  const { tenantId } = req.user;
+  
+  const banListData = {
+    ...req.body,
+    userId: req.user.id,
+    tenantId
+  };
+
+  const schema = Yup.object().shape({
+    groupId: Yup.string(),
+    number: Yup.string(),
+    userId: Yup.number().required()
+  });
+
+  try {
+    await schema.validate(banListData);
+  } catch (error) {
+    throw new AppError(error.message);
+  }
+
+  const { banListId } = req.params;
+  const banList = await UpdateBanListService({
+    banListData,
+    banListId
+  });
+
+  const io = getIO();
+  io.emit("banList", {
+    action: "update",
+    banList
+  });
+
+  return res.status(200).json(banList);
 };
 
-// Função para atualizar um banimento
-export const update = async (req: any, res: any) => {
-    const { tenantId, id: userId } = req.params;
-    const { banListId } = req.params;
-    const data = { ...req.body, userId, tenantId };
+export const remove = async (req: Request, res: Response): Promise<Response> => {
+  const { tenantId } = req.user;
+  const { banListId } = req.params;
 
-    const schema = Yup.object().shape({
-        groupId: Yup.string(),
-        number: Yup.string(),
-        userId: Yup.string().required(),
-    });
+  await DeleteBanListService(banListId, tenantId);
 
-    try {
-        await schema.validate(data);
-        const banList = await UpdateBanListServiceZPRO({ banListData: data, banListId });
-        const io = getIO();
+  const io = getIO();
+  io.emit("banList", {
+    action: "delete",
+    banListId
+  });
 
-        io.emit('banlist:updated', { action: 'update', banList });
-        return res.status(200).json(banList);
-    } catch (error) {
-        throw new AppErrorZPRO(error.message);
-    }
+  return res.status(200).json({ message: "Banlist deleted" });
 };
 
-// Função para remover um banimento específico
-export const remove = async (req: any, res: any) => {
-    const { tenantId } = req.params;
-    const { banListId } = req.params;
+export const removeAll = async (req: Request, res: Response): Promise<Response> => {
+  const { tenantId } = req.user;
 
-    try {
-        await DeleteBanListServiceZPRO(banListId, tenantId);
-        const io = getIO();
+  await DeleteAllBanListService(tenantId);
 
-        io.emit('banlist:deleted', { action: 'delete', banListId });
-        return res.status(200).json({ message: 'Banlist deleted successfully' });
-    } catch (error) {
-        throw new AppErrorZPRO(error.message);
-    }
-};
+  const io = getIO();
+  io.emit("banList", { action: "delete" });
 
-// Função para remover todos os banimentos
-export const removeAll = async (req: any, res: any) => {
-    const { tenantId } = req.params;
-
-    try {
-        await DeleteAllBanListServiceZPRO(tenantId);
-        const io = getIO();
-
-        io.emit('banlist:deletedAll', { action: 'deleteAll' });
-        return res.status(200).json({ message: 'All banlists deleted successfully' });
-    } catch (error) {
-        throw new AppErrorZPRO(error.message);
-    }
-};
+  return res.status(200).json({ message: "All Banlist deleted" });
+}; 

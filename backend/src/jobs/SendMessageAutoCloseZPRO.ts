@@ -1,103 +1,160 @@
-'use strict';
+import { logger } from "../utils/logger";
+import { getWbot } from "../libs/wbot";
+import Ticket from "../models/Ticket";
+import Setting from "../models/Setting"; 
+import Tenant from "../models/Tenant";
+import Contact from "../models/Contact";
+import ShowTicketService from "../services/TicketServices/ShowTicketService";
+import socketEmit from "../helpers/socketEmit";
 
-import loggerZPRO from '../utils/loggerZPRO';
-import TicketZPRO from '../models/TicketZPRO';
-import SettingZPRO from '../models/SettingZPRO';
-import TenantZPRO from '../models/TenantZPRO';
-import ShowTicketServiceZPRO from '../services/ShowTicketServiceZPRO';
-import socketEmitZPRO from '../socketEmitZPRO';
-import CreateMessageSystemServiceZPRO from '../services/CreateMessageSystemServiceZPRO';
-import SendWABAMetaTextServiceZPRO from '../services/SendWABAMetaTextServiceZPRO';
-import WhatsappZPRO from '../models/WhatsappZPRO';
-import ContactZPRO from '../models/ContactZPRO';
-import { v4 as uuidv4 } from 'uuid';
-
-const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
-
-function randomIntFromInterval(min: number, max: number) {
-    return Math.floor(Math.random() * (max - min + 1) + min);
+interface JobConfig {
+  key: string;
+  options: {
+    repeat: {
+      cron: string;
+      tz: string;
+    };
+    attempts: number;
+    backoff: {
+      type: string;
+      delay: number;
+    };
+  };
+  handle(): Promise<void>;
 }
 
-const rndInt = randomIntFromInterval(1000, 5000);
-
-exports.autoCloseTickets = {
-    async handle() {
-        try {
-            const tenants = await TenantZPRO.findAll({ order: [['id', 'ASC']] });
-            for (const tenant of tenants) {
-                const tenantId = tenant.id;
-
-                const autoCloseSetting = await SettingZPRO.findOne({ where: { key: 'autoCloseTickets', tenantId } });
-                const closeDelaySetting = await SettingZPRO.findOne({ where: { key: 'autoCloseMinutes', tenantId } });
-                const closeMessageSetting = await SettingZPRO.findOne({ where: { key: 'autoCloseMessage', tenantId } });
-
-                if (autoCloseSetting?.value === 'enabled') {
-                    const pendingTickets = await TicketZPRO.findAll({ where: { tenantId, status: 'open' } });
-
-                    for (const ticket of pendingTickets) {
-                        if (ticket.lastMessageAt && !ticket.autoClosed) {
-                            const now = Math.floor(new Date().getTime() / 1000);
-                            const lastMessageTime = Math.floor(ticket.lastMessageAt.getTime() / 1000);
-                            const delay = closeDelaySetting ? parseInt(closeDelaySetting?.value) * 60 : 30 * 60;
-
-                            if (now - lastMessageTime > delay) {
-                                const closeMessage = closeMessageSetting?.value || 'Seu atendimento foi encerrado.';
-
-                                if (ticket.channel === 'whatsapp') {
-                                    const messagePayload = {
-                                        body: closeMessage,
-                                        isGroup: false,
-                                        fromMe: true,
-                                        sendType: 'bot'
-                                    };
-
-                                    const uuid = uuidv4();
-
-                                    const messageData = {
-                                        body: messagePayload,
-                                        ticketId: ticket.id,
-                                        ticket,
-                                        sendType: messagePayload.sendType,
-                                        uuid
-                                    };
-
-                                    await CreateMessageSystemServiceZPRO.handle(messageData);
-
-                                    const contact = await ContactZPRO.findOne({ where: { id: ticket.contactId } });
-                                    const whatsapp = await WhatsappZPRO.findOne({ where: { id: ticket.whatsappId } });
-
-                                    if (contact && whatsapp) {
-                                        const showTicket = await ShowTicketServiceZPRO.handle({ id: ticket.id, tenantId: ticket.tenantId });
-                                        const sendWABAMessage = new SendWABAMetaTextServiceZPRO();
-                                        const messagePayload = {
-                                            contactName: contact.name,
-                                            whatsappName: whatsapp.name,
-                                            message: closeMessage,
-                                            ticket: showTicket,
-                                            tenantId: showTicket.tenantId,
-                                            uuid
-                                        };
-
-                                        await sendWABAMessage.send(messagePayload);
-                                    }
-                                }
-
-                                try {
-                                    await ticket.update({ status: 'closed', autoClosed: true });
-                                    const showTicket = await ShowTicketServiceZPRO.handle({ id: ticket.id, tenantId: ticket.tenantId });
-                                    socketEmitZPRO.handle({ tenantId: ticket.tenantId, action: 'ticket:updated', ticket: showTicket });
-                                } catch (error) {
-                                    loggerZPRO.warn('Erro ao fechar ticket automaticamente:', error);
-                                }
-                            }
-
-                            await timer(rndInt);
-                        }
-                    }
-                }
-            }
-        } catch (error) {
-            loggerZPRO.warn('Erro ao processar fechamento automático de tickets:', error);
-        }
+const jobConfig: JobConfig = {
+  key: "SendMessageAutoClose",
+  options: {
+    repeat: {
+      cron: "*/20 * * * *", // A cada 20 minutos
+      tz: "America/Sao_Paulo"
+    },
+    attempts: 10,
+    backoff: {
+      type: "fixed",
+      delay: 60000 // 1 minuto
     }
+  },
+
+  async handle(): Promise<void> {
+    logger.info("SendMessageAutoClose Initiated");
+
+    try {
+      const tenants = await Tenant.findAll({
+        order: [["name", "ASC"]]
+      });
+
+      for (const tenant of tenants) {
+        const tenantId = tenant.id;
+
+        // Buscar configurações do tenant
+        const autoCloseSetting = await Setting.findOne({
+          where: {
+            key: "autoClose",
+            tenantId
+          }
+        });
+
+        const autoCloseTimer = await Setting.findOne({
+          where: {
+            key: "autoCloseTimer", 
+            tenantId
+          }
+        });
+
+        const autoCloseMessage = await Setting.findOne({
+          where: {
+            key: "autoCloseMessage",
+            tenantId
+          }
+        });
+
+        // Verificar se autoClose está ativado
+        if (autoCloseSetting?.value === "enabled") {
+          const tickets = await Ticket.findAll({
+            where: {
+              tenantId,
+              status: "open"
+            }
+          });
+
+          for (const ticket of tickets) {
+            const currentTime = Math.floor(new Date().getTime() / 1000);
+            const lastMessageTime = Math.floor(ticket.lastMessageAt / 1000);
+            const timer = autoCloseTimer ? 
+              parseInt(autoCloseTimer.value) * 60 : 
+              180; // 3 horas padrão
+
+            if ((currentTime - lastMessageTime) > timer) {
+              const message = autoCloseMessage?.value ?? 
+                "Mensagem padrão de autoclose";
+
+              if (ticket.whatsappId && ticket.lastCall) {
+                const contact = await Contact.findOne({
+                  where: { id: ticket.contactId }
+                });
+
+                try {
+                  const wbot = getWbot(ticket.whatsappId);
+                  const sentMessage = await wbot.sendMessage(
+                    `${contact?.number}@c.us`,
+                    message
+                  );
+
+                  // Atualizar status do ticket
+                  await ticket.update({
+                    status: "closed",
+                    lastCall: false
+                  });
+
+                  // Emitir atualização via socket
+                  const ticketData = await ShowTicketService({
+                    id: ticket.id,
+                    tenantId: ticket.tenantId
+                  });
+
+                  socketEmit({
+                    tenantId: ticket.tenantId,
+                    type: "ticket:update",
+                    payload: ticketData
+                  });
+
+                } catch (err) {
+                  logger.error("Error sending auto close message:", err);
+                }
+              } else {
+                try {
+                  await ticket.update({
+                    status: "closed"
+                  });
+
+                  const ticketData = await ShowTicketService({
+                    id: ticket.id,
+                    tenantId: ticket.tenantId
+                  });
+
+                  socketEmit({
+                    tenantId: ticket.tenantId,
+                    type: "ticket:update", 
+                    payload: ticketData
+                  });
+
+                } catch (err) {
+                  logger.error("Error updating ticket status:", err);
+                }
+              }
+            }
+          }
+        }
+      }
+
+    } catch (err) {
+      logger.error("Error processing auto close job:", err);
+    }
+
+    logger.info("SendMessageAutoClose Finalized");
+  }
 };
+
+export default jobConfig; 

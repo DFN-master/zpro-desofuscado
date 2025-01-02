@@ -1,3 +1,4 @@
+import { Request, Response } from 'express';
 import axios from 'axios';
 
 interface AuthRequest {
@@ -5,24 +6,21 @@ interface AuthRequest {
   password: string;
 }
 
-interface AuthResponse {
-  status: number;
-  data: any;
-}
-
-export async function autenticar(req: { body: AuthRequest }, res: any): Promise<void> {
-  const API_URL = `${process.env.USUARIO_API}`;
-  const API_PASSWORD = `${process.env.SENHA_API}`;
-
-  const requestData = {
-    username: API_URL,
-    password: API_PASSWORD,
-  };
+export async function autenticar(req: Request, res: Response): Promise<void> {
+  const { username, password } = req.body as AuthRequest;
 
   try {
-    const response = await axios.post<AuthResponse>(API_URL, requestData);
-    res.status(200).json(response.data);
+    const config = {
+      username: process.env.USUARIO_API,
+      password: process.env.SENHA_API
+    };
+
+    const response = await axios.post('https://zpro.com.br', config);
+    res.json(response.data);
+    
   } catch (error) {
-    res.status(500).json({ error: "Erro na autenticação" });
+    res.status(401).json({
+      error: 'Erro na autenticação'
+    });
   }
-}
+} 

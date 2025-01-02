@@ -1,99 +1,161 @@
 import * as Yup from 'yup';
-import CreateApiConfigServiceZPRO from '../services/CreateApiConfigServiceZPRO';
-import ListApiConfigServiceZPRO from '../services/ListApiConfigServiceZPRO';
+import { Request, Response } from 'express';
 import AppErrorZPRO from '../errors/AppErrorZPRO';
-import UpdateApiConfigServiceZPRO from '../services/UpdateApiConfigServiceZPRO';
-import DeleteApiConfigServiceZPRO from '../services/DeleteApiConfigServiceZPRO';
-import RenewApiConfigTokenServiceZPRO from '../services/RenewApiConfigTokenServiceZPRO';
 
-interface ApiData {
-  tenantId: string;
-  id: string;
-  apiId?: string;
-  [key: string]: any;
+import CreateApiConfigServiceZPRO from '../services/ApiConfigServices/CreateApiConfigServiceZPRO';
+import ListApiConfigServiceZPRO from '../services/ApiConfigServices/ListApiConfigServiceZPRO';
+import UpdateApiConfigServiceZPRO from '../services/ApiConfigServices/UpdateApiConfigServiceZPRO';
+import DeleteApiConfigServiceZPRO from '../services/ApiConfigServices/DeleteApiConfigServiceZPRO';
+import RenewApiConfigTokenServiceZPRO from '../services/ApiConfigServices/RenewApiConfigTokenServiceZPRO';
+
+interface IStoreRequest {
+  name: string;
+  sessionId: number;
+  urlServiceStatus?: string;
+  urlMessageStatus?: string;
+  userId: number;
+  tenantId: number;
 }
 
-interface Response {
-  json: (data: any) => Response;
-  status: (code: number) => Response;
+interface IUpdateRequest extends IStoreRequest {
+  isActive: boolean;
+  apiId: number;
 }
 
-const store = async (apiData: ApiData, res: Response): Promise<Response> => {
-  const { tenantId, id } = apiData;
+interface IRenewTokenRequest {
+  sessionId: number;
+  userId: number;
+  tenantId: number;
+  apiId: number;
+}
 
-  const validationSchema = Yup.object().shape({
-    name: Yup.string().nullable().required(),
-    sessionId: Yup.string().nullable().required(),
-    urlServiceStatus: Yup.string().nullable().url().required(),
-    urlMessageStatus: Yup.string().nullable().url().required(),
-    userId: Yup.string().nullable().required(),
-    tenantId: Yup.string().nullable().required(),
+export const store = async (req: Request, res: Response): Promise<Response> => {
+  const { tenantId, id } = req.params;
+  
+  if (req.params.profile !== 'admin' && req.params.profile !== 'super') {
+    throw new AppErrorZPRO('ERR_NO_PERMISSION', 403);
+  }
+
+  const data = {
+    ...req.body,
+    userId: id,
+    tenantId
+  };
+
+  const schema = Yup.object().shape({
+    name: Yup.string().required(),
+    sessionId: Yup.number().required(),
+    urlServiceStatus: Yup.string().nullable().optional(),
+    urlMessageStatus: Yup.string().nullable().optional(),
+    userId: Yup.number().required(),
+    tenantId: Yup.number().required()
   });
 
   try {
-    await validationSchema.validate(apiData);
-  } catch (error) {
-    throw new AppErrorZPRO(error.message);
+    await schema.validate(data);
+  } catch (err: any) {
+    throw new AppErrorZPRO(err.message);
   }
 
-  const newApiConfig = await CreateApiConfigServiceZPRO(apiData);
-  return res.status(200).json(newApiConfig);
+  const apiConfig = await CreateApiConfigServiceZPRO(data);
+  return res.status(200).json(apiConfig);
 };
 
-const index = async (apiData: ApiData, res: Response): Promise<Response> => {
-  const { tenantId } = apiData;
+export const index = async (req: Request, res: Response): Promise<Response> => {
+  const { tenantId } = req.params;
 
-  const apiConfigList = await ListApiConfigServiceZPRO({ tenantId });
-  return res.status(200).json(apiConfigList);
+  if (req.params.profile !== 'admin' && req.params.profile !== 'super') {
+    throw new AppErrorZPRO('ERR_NO_PERMISSION', 403);
+  }
+
+  const apiConfigs = await ListApiConfigServiceZPRO({ tenantId });
+  return res.status(200).json(apiConfigs);
 };
 
-const update = async (apiData: ApiData, res: Response): Promise<Response> => {
-  const { tenantId, id, apiId } = apiData;
+export const update = async (req: Request, res: Response): Promise<Response> => {
+  if (req.params.profile !== 'admin' && req.params.profile !== 'super') {
+    throw new AppErrorZPRO('ERR_NO_PERMISSION', 403);
+  }
 
-  const validationSchema = Yup.object().shape({
-    name: Yup.string().nullable().required(),
-    sessionId: Yup.string().nullable().required(),
-    urlServiceStatus: Yup.string().nullable().url().required(),
-    urlMessageStatus: Yup.string().nullable().url().required(),
-    userId: Yup.string().nullable().required(),
-    tenantId: Yup.string().nullable().required(),
-    isActive: Yup.boolean().nullable().required(),
+  const { tenantId, id } = req.params;
+  const { apiId } = req.body;
+
+  const data = {
+    ...req.body,
+    userId: id,
+    tenantId
+  };
+
+  const schema = Yup.object().shape({
+    name: Yup.string().required(),
+    sessionId: Yup.number().required(),
+    urlServiceStatus: Yup.string().nullable().optional(),
+    urlMessageStatus: Yup.string().nullable().optional(),
+    userId: Yup.number().required(),
+    tenantId: Yup.number().required(),
+    isActive: Yup.boolean().required()
   });
 
   try {
-    await validationSchema.validate(apiData);
-  } catch (error) {
-    throw new AppErrorZPRO(error.message);
+    await schema.validate(data);
+  } catch (err: any) {
+    throw new AppErrorZPRO(err.message);
   }
 
-  const updatedConfig = await UpdateApiConfigServiceZPRO({ ...apiData, apiId });
-  return res.status(200).json(updatedConfig);
+  const apiConfig = await UpdateApiConfigServiceZPRO({
+    apiData: data,
+    apiId,
+    tenantId
+  });
+
+  return res.status(200).json(apiConfig);
 };
 
-const remove = async (apiData: ApiData, res: Response): Promise<Response> => {
-  const { tenantId, apiId } = apiData;
+export const remove = async (req: Request, res: Response): Promise<Response> => {
+  if (req.params.profile !== 'admin' && req.params.profile !== 'super') {
+    throw new AppErrorZPRO('ERR_NO_PERMISSION', 403);
+  }
+
+  const { tenantId } = req.params;
+  const { apiId } = req.body;
 
   await DeleteApiConfigServiceZPRO({ apiId, tenantId });
+
   return res.status(200).json({ message: 'API Config Deleted' });
 };
 
-const renewTokenApi = async (apiData: ApiData, res: Response): Promise<Response> => {
-  const { tenantId, id, apiId } = apiData;
+export const renewTokenApi = async (req: Request, res: Response): Promise<Response> => {
+  if (req.params.profile !== 'admin' && req.params.profile !== 'super') {
+    throw new AppErrorZPRO('ERR_NO_PERMISSION', 403);
+  }
 
-  const validationSchema = Yup.object().shape({
-    sessionId: Yup.string().nullable().required(),
-    userId: Yup.string().nullable().required(),
-    tenantId: Yup.string().nullable().required(),
+  const { tenantId, id } = req.params;
+  const { apiId } = req.body;
+
+  const data = {
+    ...req.body,
+    userId: id,
+    tenantId
+  };
+
+  const schema = Yup.object().shape({
+    sessionId: Yup.number().required(),
+    userId: Yup.number().required(),
+    tenantId: Yup.number().required()
   });
 
   try {
-    await validationSchema.validate(apiData);
-  } catch (error) {
-    throw new AppErrorZPRO(error.message);
+    await schema.validate(data);
+  } catch (err: any) {
+    throw new AppErrorZPRO(err.message);
   }
 
-  const newToken = await RenewApiConfigTokenServiceZPRO({ tenantId, id, apiId });
-  return res.status(200).json(newToken);
-};
+  const apiConfig = await RenewApiConfigTokenServiceZPRO({
+    apiId,
+    userId: data.userId,
+    sessionId: data.sessionId,
+    tenantId: data.tenantId
+  });
 
-export { store, index, update, remove, renewTokenApi };
+  return res.status(200).json(apiConfig);
+}; 

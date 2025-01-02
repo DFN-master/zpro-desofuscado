@@ -1,33 +1,65 @@
+import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
 import { format } from 'date-fns';
+import { logger } from '../utils/loggerZPRO';
 
-// Define the public folder path
+interface RequestWithUser {
+  user?: {
+    tenantId: string;
+  };
+  APIAuth?: {
+    tenantId: string;
+  };
+}
+
 const publicFolder = path.resolve(__dirname, '..', '..', 'public');
 
-// Multer storage configuration
-export const storageConfig = {
+const uploadConfig = {
   directory: publicFolder,
   storage: multer.diskStorage({
-    destination: publicFolder,
-    filename(req, file, cb) {
-      let fileName: string;
+    destination: (
+      req: RequestWithUser,
+      file: Express.Multer.File,
+      callback: (error: Error | null, destination: string) => void
+    ) => {
+      const { tenantId } = req.user || req.APIAuth || {};
+      
+      logger.info(`::: Z-PRO ::: ZDG ::: Upload Tenant: ${tenantId}`);
+      
+      const destinationPath = path.resolve(publicFolder, tenantId.toString());
 
-      // Check if the file mimetype ends with 'xml'
-      if (file.mimetype && file.mimetype.toLocaleLowerCase().endsWith('xml')) {
-        // Use the original name for XML files
-        fileName = file.originalname;
-      } else {
-        // For other files, format the filename with the current date
-        const { originalname } = file;
-        const ext = path.extname(originalname);
-        const nameWithoutExt = originalname.replace(ext, '');
-        const timestamp = format(new Date(), 'ddMMyyyyHHmmssSSS');
-        fileName = `${nameWithoutExt}_${timestamp}${ext}`;
+      if (!fs.existsSync(destinationPath)) {
+        fs.mkdirSync(destinationPath, { recursive: true });
       }
 
-      // Pass the filename to the callback
-      cb(null, fileName);
+      callback(null, destinationPath);
+    },
+
+    filename: (
+      req: RequestWithUser,
+      file: Express.Multer.File,
+      callback: (error: Error | null, filename: string) => void
+    ) => {
+      let finalFilename: string;
+
+      if (file.mimetype?.toLowerCase().endsWith('xml')) {
+        finalFilename = file.originalname;
+      } else {
+        const { originalname } = file;
+        const fileExtension = path.extname(originalname);
+        const fileName = originalname
+          .replace(fileExtension, '')
+          .replace(/\s+/g, '_')
+          .replace(/[^\w.-]/g, '');
+        
+        const dateStamp = format(new Date(), 'ddMMyyyyHHmmssSSS');
+        finalFilename = `${fileName}_${dateStamp}${fileExtension}`;
+      }
+
+      callback(null, finalFilename);
     }
   })
 };
+
+export default uploadConfig; 

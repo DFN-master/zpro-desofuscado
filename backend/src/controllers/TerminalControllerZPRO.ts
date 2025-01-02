@@ -1,36 +1,34 @@
-import TerminalServiceZPRO from '../services/TerminalServiceZPRO';
-import AppErrorZPRO from '../errors/AppErrorZPRO';
+import { Request, Response } from 'express';
+import { AppErrorZPRO } from '../errors/AppErrorZPRO';
+import { terminalService } from '../services/TerminalServices/TerminalServiceZPRO';
 
-interface ApiData {
+interface IRequestWithUser extends Request {
   user: {
     profile: string;
   };
-  body: {
-    command: string;
-  };
 }
 
-interface Response {
-  status: (code: number) => Response;
-  send: (data: any) => Response;
-}
-
-async function handleCommand(apiData: ApiData, res: Response): Promise<void> {
-  if (apiData.user.profile !== 'superadmin') {
-    throw new AppErrorZPRO('ERR_NO_PERMISSION: Superadmin profile required.', 403);
+export async function handleCommand(
+  request: IRequestWithUser,
+  response: Response
+): Promise<void> {
+  // Verifica se o usuário tem perfil de superadmin
+  if (request.user.profile !== 'superadmin') {
+    throw new AppErrorZPRO('ERR_NO_PERMISSION', 403);
   }
 
-  const { command } = apiData.body;
+  const { command } = request.body;
 
   try {
-    const commandResult = await TerminalServiceZPRO.sendCommand(command);
-    res.send({
-      message: 'Command executed successfully.',
-      output: commandResult.toString(),
+    const output = await terminalService.sendCommand(command);
+    
+    response.send({
+      message: 'Comando executado com sucesso.',
+      output: output.trim()
     });
   } catch (error) {
-    res.status(500).send({ error: error.message });
+    response.status(500).send({ 
+      error: error.toString() 
+    });
   }
-}
-
-export { handleCommand };
+} 

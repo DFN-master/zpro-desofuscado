@@ -1,66 +1,83 @@
 import {
-    Model,
-    Column,
-    PrimaryKey,
-    AutoIncrement,
-    AllowNull,
-    Default,
-    ForeignKey,
-    BelongsTo,
-    CreatedAt,
-    UpdatedAt,
-    Table
-  } from 'sequelize-typescript';
-  import TenantZPRO from './TenantZPRO';
-  import UserZPRO from './UserZPRO';
-  
-  @Table({ freezeTableName: true })
-  class FastReply extends Model {
-    @PrimaryKey
-    @AutoIncrement
-    @Column
-    id!: number;
-  
-    @AllowNull(false)
-    @Column
-    key!: string;
-  
-    @AllowNull(false)
-    @Column
-    message!: string;
-  
-    @AllowNull(true)
-    @Default(null)
-    @Column
-    media!: string;
-  
-    @AllowNull(true)
-    @Default(null)
-    @Column
-    voice!: string;
-  
-    @ForeignKey(() => UserZPRO)
-    @Column
-    userId!: number;
-  
-    @BelongsTo(() => UserZPRO)
-    user!: UserZPRO;
-  
-    @ForeignKey(() => TenantZPRO)
-    @Column
-    tenantId!: number;
-  
-    @BelongsTo(() => TenantZPRO)
-    tenant!: TenantZPRO;
-  
-    @CreatedAt
-    @Column
-    createdAt!: Date;
-  
-    @UpdatedAt
-    @Column
-    updatedAt!: Date;
-  }
-  
-  export default FastReply;
-  
+  Table,
+  Model,
+  PrimaryKey,
+  AutoIncrement,
+  Column,
+  CreatedAt,
+  UpdatedAt,
+  ForeignKey,
+  BelongsTo,
+  DataType
+} from 'sequelize-typescript';
+
+import Tenant from './TenantZPRO';
+import User from './UserZPRO';
+
+interface FastReplyAttributes {
+  id: number;
+  key: string;
+  message: string;
+  media?: string;
+  voice?: string;
+  userId: number;
+  tenantId: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+@Table({
+  freezeTableName: true
+})
+export default class FastReply extends Model<FastReplyAttributes> {
+  @PrimaryKey
+  @AutoIncrement
+  @Column
+  id!: number;
+
+  @Column({
+    allowNull: false,
+    type: DataType.STRING
+  })
+  key!: string;
+
+  @Column({
+    allowNull: false,
+    type: DataType.STRING
+  })
+  message!: string;
+
+  @Column({
+    defaultValue: null,
+    allowNull: true,
+    type: DataType.STRING
+  })
+  media?: string;
+
+  @Column({
+    defaultValue: null,
+    allowNull: true,
+    type: DataType.STRING
+  })
+  voice?: string;
+
+  @ForeignKey(() => User)
+  @Column
+  userId!: number;
+
+  @BelongsTo(() => User)
+  user!: User;
+
+  @ForeignKey(() => Tenant)
+  @Column
+  tenantId!: number;
+
+  @BelongsTo(() => Tenant)
+  tenant!: Tenant;
+
+  @CreatedAt
+  createdAt!: Date;
+
+  @UpdatedAt
+  updatedAt!: Date;
+} 
