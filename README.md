@@ -4,3 +4,5 @@ Cuidado com esse codigo ele mostra que o Nasa rouba informacoes dos clientes com
 
 Serviços de desofuscacao de codigo consulte a gente.
 Telegram: https://t.me/MaverickDevs 
+
+Vakinha para terminar -  https://www.vakinha.com.br/5281142
